@@ -1,0 +1,523 @@
+// AI Marketing Employee — data layer
+// Every workspace is the unit of memory: one business, one AI employee.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+// ---------------------------------------------------------------------------
+// Identity & billing
+// ---------------------------------------------------------------------------
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  name      String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organizations OrganizationMember[]
+  conversations Conversation[]
+
+  @@map("users")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members    OrganizationMember[]
+  workspaces Workspace[]
+  billing    Billing?
+  usage      Usage[]
+
+  @@map("organizations")
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           OrgRole      @default(OWNER)
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, userId])
+  @@map("organization_members")
+}
+
+enum PlanTier {
+  FREE
+  STARTER
+  GROWTH
+  AGENCY
+}
+
+model Billing {
+  id                   String       @id @default(cuid())
+  organizationId       String       @unique
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stripeCustomerId     String?      @unique
+  stripeSubscriptionId String?      @unique
+  plan                 PlanTier     @default(FREE)
+  status               String       @default("inactive")
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  @@map("billing")
+}
+
+model Usage {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  metric         String // e.g. "ai_tokens", "content_generated", "research_runs"
+  quantity       Int          @default(1)
+  periodStart    DateTime
+  periodEnd      DateTime
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, metric, periodStart])
+  @@map("usage")
+}
+
+// ---------------------------------------------------------------------------
+// Workspace — the home of one business's marketing memory
+// ---------------------------------------------------------------------------
+
+enum WorkspaceStatus {
+  ONBOARDING
+  ACTIVE
+  PAUSED
+}
+
+model Workspace {
+  id             String          @id @default(cuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  status         WorkspaceStatus @default(ONBOARDING)
+  timezone       String          @default("UTC")
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  businessProfile    BusinessProfile?
+  research           Research[]
+  competitors        Competitor[]
+  personas           CustomerPersona[]
+  strategies         MarketingStrategy[]
+  contentCalendars   ContentCalendar[]
+  contents           Content[]
+  tasks              Task[]
+  knowledge          Knowledge[]
+  campaigns          Campaign[]
+  conversations      Conversation[]
+  analyticsSnapshots Analytics[]
+
+  @@map("workspaces")
+}
+
+// ---------------------------------------------------------------------------
+// Business understanding
+// ---------------------------------------------------------------------------
+
+model BusinessProfile {
+  id          String    @id @default(cuid())
+  workspaceId String    @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  businessName String
+  industry     String?
+  website      String?
+  socialLinks  Json? // { twitter, linkedin, instagram, ... }
+
+  products Json? // [{ name, description, price }]
+  services Json? // [{ name, description, price }]
+
+  targetAudience String?
+  usp            String? // unique selling proposition
+  brandTone      String?
+  mission        String?
+  vision         String?
+  location       String?
+
+  monthlyBudget     Float?
+  preferredChannels String[] @default([])
+  goals             String[] @default([])
+
+  rawOnboarding Json? // full raw answers from onboarding Q&A
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("business_profiles")
+}
+
+// ---------------------------------------------------------------------------
+// Research
+// ---------------------------------------------------------------------------
+
+enum ResearchType {
+  MARKET
+  INDUSTRY_TRENDS
+  CUSTOMER_PAIN_POINTS
+  SEARCH_DEMAND
+  SEASONALITY
+  CUSTOM
+}
+
+model Research {
+  id          String       @id @default(cuid())
+  workspaceId String
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  type        ResearchType
+  title       String
+  summary     String
+  content     Json // structured report body
+  sources     Json? // [{ title, url }]
+  createdAt   DateTime     @default(now())
+
+  @@index([workspaceId, type])
+  @@map("research")
+}
+
+// ---------------------------------------------------------------------------
+// Competitor intelligence
+// ---------------------------------------------------------------------------
+
+model Competitor {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  name          String
+  website       String?
+  pricing       Json?
+  features      Json?
+  strengths     String[] @default([])
+  weaknesses    String[] @default([])
+  positioning   String?
+  messaging     String?
+  seoSummary    Json?
+  adSummary     Json?
+  socialSummary Json?
+  opportunities String[] @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("competitors")
+}
+
+// ---------------------------------------------------------------------------
+// Customer intelligence
+// ---------------------------------------------------------------------------
+
+model CustomerPersona {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  name              String
+  demographics      Json?
+  psychographics    Json?
+  goals             String[] @default([])
+  painPoints        String[] @default([])
+  frustrations      String[] @default([])
+  dreamOutcomes     String[] @default([])
+  buyingMotivations String[] @default([])
+  objections        String[] @default([])
+  favoritePlatforms String[] @default([])
+  buyingJourney     Json?
+  decisionTriggers  String[] @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("customer_personas")
+}
+
+// ---------------------------------------------------------------------------
+// Marketing strategy
+// ---------------------------------------------------------------------------
+
+enum StrategyStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+model MarketingStrategy {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  title            String
+  status           StrategyStatus @default(DRAFT)
+  overview         String
+  seoStrategy      Json?
+  socialStrategy   Json?
+  emailStrategy    Json?
+  contentStrategy  Json?
+  growthRoadmap    Json?
+  ninetyDayPlan    Json?
+  quarterlyGoals   Json?
+  priorityChannels String[]       @default([])
+  kpis             Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("marketing_strategies")
+}
+
+// ---------------------------------------------------------------------------
+// Content planning & creation
+// ---------------------------------------------------------------------------
+
+model ContentCalendar {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  title       String
+  periodStart DateTime
+  periodEnd   DateTime
+  plan        Json // structured day-by-day / week-by-week plan
+
+  contents Content[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("content_calendars")
+}
+
+enum ContentType {
+  BLOG_POST
+  LANDING_PAGE
+  LINKEDIN_POST
+  TWITTER_POST
+  REDDIT_POST
+  EMAIL_NEWSLETTER
+  COLD_EMAIL
+  FACEBOOK_AD
+  GOOGLE_AD
+  META_AD
+  INSTAGRAM_CAPTION
+  CASE_STUDY
+  PRESS_RELEASE
+  PRODUCT_DESCRIPTION
+  VIDEO_SCRIPT
+  YOUTUBE_DESCRIPTION
+  LEAD_MAGNET
+}
+
+enum ContentStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+model Content {
+  id                String           @id @default(cuid())
+  workspaceId       String
+  workspace         Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contentCalendarId String?
+  contentCalendar   ContentCalendar? @relation(fields: [contentCalendarId], references: [id], onDelete: SetNull)
+  campaignId        String?
+  campaign          Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  type        ContentType
+  status      ContentStatus @default(DRAFT)
+  title       String
+  body        String
+  metadata    Json? // { keywords, cta, tone, targetPersonaId, channel }
+  scheduledAt DateTime?
+  publishedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, type, status])
+  @@map("contents")
+}
+
+// ---------------------------------------------------------------------------
+// Campaigns & tasks
+// ---------------------------------------------------------------------------
+
+enum CampaignStatus {
+  PLANNED
+  RUNNING
+  COMPLETED
+  CANCELLED
+}
+
+model Campaign {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  name      String
+  goal      String?
+  channels  String[]       @default([])
+  status    CampaignStatus @default(PLANNED)
+  startDate DateTime?
+  endDate   DateTime?
+  results   Json?
+
+  contents Content[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("campaigns")
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  SKIPPED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  dueDate     DateTime?
+  source      String       @default("ai") // "ai" | "user"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, status])
+  @@map("tasks")
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge & memory (embeddings power semantic recall)
+// ---------------------------------------------------------------------------
+
+enum KnowledgeType {
+  BRAND_VOICE
+  DECISION
+  CUSTOMER_LANGUAGE
+  CAMPAIGN_LEARNING
+  COMPETITOR_INSIGHT
+  GENERAL
+}
+
+model Knowledge {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  type      KnowledgeType                @default(GENERAL)
+  content   String
+  /// pgvector embedding (OpenAI text-embedding-3-small, 1536 dims)
+  embedding Unsupported("vector(1536)")?
+  metadata  Json?
+
+  createdAt DateTime @default(now())
+
+  @@map("knowledge")
+}
+
+// ---------------------------------------------------------------------------
+// Conversations (the single AI employee the user talks to)
+// ---------------------------------------------------------------------------
+
+model Conversation {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  messages Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("conversations")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  role       MessageRole
+  content    String
+  /// which internal capability produced this (never shown to the user)
+  capability String?
+  metadata   Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId])
+  @@map("messages")
+}
+
+// ---------------------------------------------------------------------------
+// Analytics
+// ---------------------------------------------------------------------------
+
+model Analytics {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  source      String // "ga4" | "search_console" | "email" | "social" | "manual"
+  metrics     Json // { traffic, ctr, conversions, bounceRate, ... }
+  periodStart DateTime
+  periodEnd   DateTime
+  insights    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([workspaceId, source, periodStart])
+  @@map("analytics")
+}
