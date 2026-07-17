@@ -10,8 +10,7 @@ never exposed in the UI.
 This repository contains the **MVP scaffold**: the full data model, the
 internal capability/prompt architecture, auth, onboarding, dashboard, and
 content generation flows described in `docs/ai-marketing-employee-spec.md`
-(the original product brief). The course curriculum that previously lived at
-the repo root has moved to `docs/course-curriculum-README.md` and `modules/`.
+(the original product brief).
 
 ## Stack
 
