@@ -1,0 +1,461 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Claude Video Editor</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single reading column cut like an edit timeline — each step is a clip marked with its timecode on a left rail. */
+:root {
+  --bg: #F6F7F9;
+  --surface: #FFFFFF;
+  --ink: #15171C;
+  --muted: #5B6170;
+  --line: #DCE0E7;
+  --accent: #D9480F;
+  --accent-soft: #FCE9DF;
+  --track: #2F6FDE;
+  --track-soft: #E4EDFC;
+  --ok: #1E7F4F;
+  --warn: #9A5B00;
+  --warn-soft: #FFF3D6;
+  --code-bg: #EEF1F5;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101216; --surface: #171A20; --ink: #EDEFF3; --muted: #A0A7B5; --line: #2A2F38;
+    --accent: #FF7A45; --accent-soft: #3A2016; --track: #7AA7FF; --track-soft: #18243B;
+    --ok: #5BD49A; --warn: #F2C063; --warn-soft: #33290F; --code-bg: #1F232B; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101216; --surface: #171A20; --ink: #EDEFF3; --muted: #A0A7B5; --line: #2A2F38;
+  --accent: #FF7A45; --accent-soft: #3A2016; --track: #7AA7FF; --track-soft: #18243B;
+  --ok: #5BD49A; --warn: #F2C063; --warn-soft: #33290F; --code-bg: #1F232B; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 400 16.5px/1.65 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 860px; margin: 0 auto; padding-block: 48px 96px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.12; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2.1rem, 6vw, 3.4rem); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: clamp(1.45rem, 3.4vw, 1.9rem); font-weight: 800; letter-spacing: -0.01em; }
+h3 { font-size: 1.1rem; font-weight: 600; }
+p { margin: 0; max-width: 66ch; }
+a { color: var(--track); }
+strong { font-weight: 600; }
+code { font-family: var(--mono); font-size: 0.88em; background: var(--code-bg); padding: 0.1em 0.38em; border-radius: 4px; overflow-wrap: anywhere; }
+ul, ol { margin: 0; padding-left: 1.3em; max-width: 66ch; }
+li + li { margin-top: 5px; }
+:focus-visible { outline: 2px solid var(--track); outline-offset: 2px; }
+
+.rec { display: inline-flex; align-items: center; gap: 8px; font: 500 0.78rem/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+.rec::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+header { display: grid; gap: 18px; padding-bottom: 32px; border-bottom: 1px solid var(--line); }
+.lede { font-size: 1.15rem; color: var(--muted); }
+.flow { display: flex; flex-wrap: wrap; gap: 6px; font: 500 0.82rem/1 var(--mono); }
+.flow span { background: var(--track-soft); color: var(--track); padding: 7px 10px; border-radius: 4px; }
+.flow span.you { background: var(--accent-soft); color: var(--accent); }
+
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 14px; font: 500 0.82rem/1.5 var(--mono); padding-top: 4px; }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover { color: var(--track); }
+
+.step { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 24px; padding-block: 40px; border-bottom: 1px solid var(--line); }
+.tc { font: 500 0.8rem/1.4 var(--mono); color: var(--muted); padding-top: 8px; border-left: 3px solid var(--track); padding-left: 10px; height: fit-content; font-variant-numeric: tabular-nums; }
+.tc b { display: block; color: var(--track); font-weight: 500; }
+.body { display: grid; gap: 16px; min-width: 0; }
+@media (max-width: 620px) {
+  .step { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .tc { display: flex; gap: 10px; padding-top: 0; }
+}
+
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.93rem; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 500 0.74rem/1.3 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); background: var(--code-bg); }
+tr:last-child td { border-bottom: 0; }
+.free { color: var(--ok); font-weight: 600; }
+.paid { color: var(--warn); font-weight: 600; }
+
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.box-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line); font: 500 0.75rem/1 var(--mono); color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.box pre { margin: 0; padding: 14px 16px; overflow: auto; max-height: 420px; font: 400 0.84rem/1.6 var(--mono); white-space: pre-wrap; word-break: break-word; }
+.copy { font: 500 0.75rem/1 var(--mono); padding: 7px 10px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; flex-shrink: 0; }
+.copy:hover { border-color: var(--track); color: var(--track); }
+
+.note { border-left: 3px solid var(--warn); background: var(--warn-soft); padding: 12px 16px; border-radius: 0 6px 6px 0; }
+.note p { max-width: none; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; }
+.card .k { font: 500 0.74rem/1 var(--mono); color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; }
+.folders { font: 400 0.84rem/1.7 var(--mono); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; overflow-x: auto; white-space: pre; }
+.folders .c { color: var(--muted); }
+footer { padding-top: 32px; color: var(--muted); font-size: 0.9rem; display: grid; gap: 8px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+<header>
+  <span class="rec">Complete setup guide</span>
+  <h1>How I edit my videos with Claude Code</h1>
+  <p class="lede">I record, drop the video in a folder, and paste one prompt. Claude Code does everything else: it removes gaps and background noise, adds captions (including Telugu–English “Tenglish”), a hook, zooms, animated app-screen demos, B-roll, sound effects and music, then renders the final video. This is my complete setup: every tool, skill, connector and prompt I use, step by step, so you can copy it.</p>
+  <div class="flow" aria-label="Pipeline">
+    <span class="you">Record</span><span>Clean audio</span><span>Transcribe</span><span>Cut gaps</span><span>Captions + graphics</span><span>Screen demos</span><span>Music</span><span>Render</span><span class="you">Your notes</span>
+  </div>
+  <nav class="toc" aria-label="Contents">
+    <a href="#team">Tools</a><a href="#need">What you need</a><a href="#claude">Claude setup</a><a href="#install">Install</a><a href="#connect">Connectors</a><a href="#skills">Skills</a><a href="#record">Recording</a><a href="#short">Short Reel</a><a href="#demo">Screen-demo Reel</a><a href="#long">YouTube video</a><a href="#style">Your style</a><a href="#trouble">Fixes</a><a href="#cost">Cost</a>
+  </nav>
+</header>
+
+<section class="step" id="team">
+  <div class="tc"><b>00:00</b>The tools</div>
+  <div class="body">
+    <h2>One tool for each job a video team does</h2>
+    <p>Each job a human editing team used to do goes to one tool, and Claude Code coordinates them all.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Job</th><th>Tool</th><th>Type</th><th>Cost</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Editor</strong>: decides every cut, zoom and graphic</td><td>Claude Code (desktop app, Code tab)</td><td>App</td><td class="paid">Claude Pro</td></tr>
+        <tr><td><strong>Editing brain</strong>: my steps and style rules</td><td><code>video-edit</code></td><td>Custom skill (in the kit)</td><td class="free">Free</td></tr>
+        <tr><td><strong>Animator</strong>: titles, captions, motion graphics, app-screen demos, rendering</td><td>HyperFrames by HeyGen + its 10 skills</td><td>Local tool + skills</td><td class="free">Free</td></tr>
+        <tr><td><strong>Transcriber</strong>: speech to text, with the timing of every word</td><td>Parakeet by NVIDIA (through HyperFrames)</td><td>Local model</td><td class="free">Free</td></tr>
+        <tr><td><strong>Finisher</strong>: cutting, noise removal, audio mix, loudness</td><td>FFmpeg</td><td>Local tool</td><td class="free">Free</td></tr>
+        <tr><td><strong>Music</strong></td><td>Epidemic Sound</td><td>Connector</td><td class="paid">Paid</td></tr>
+        <tr><td><strong>Screen + camera recorder</strong></td><td>Tella (or OBS Studio, or your phone)</td><td>Connector</td><td><span class="paid">Paid</span> / <span class="free">Free</span></td></tr>
+        <tr><td><strong>Researcher</strong>: real screenshots for B-roll</td><td>Claude's built-in browser</td><td>Built in</td><td class="free">Free</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section class="step" id="need">
+  <div class="tc"><b>00:30</b>Before you start</div>
+  <div class="body">
+    <h2>What you need</h2>
+    <ul>
+      <li>A <strong>Claude Pro plan</strong> (or higher) and the <strong>Claude desktop app</strong> from claude.ai/download.</li>
+      <li>A <strong>Windows or Mac laptop</strong>. Mine has 8 GB of RAM, which is enough for 1080p Reels and long videos. Renders just take a while.</li>
+      <li>The kit: <code>claude-video-editor-kit.zip</code> (link in my description). It has the editing skill, scripts and all 3 prompts.</li>
+      <li>About <strong>1 hour</strong> for setup, most of it waiting for downloads.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="step" id="claude">
+  <div class="tc"><b>01:00</b>Step 1</div>
+  <div class="body">
+    <h2>Set up Claude Code in the desktop app</h2>
+    <ol>
+      <li>Open the Claude desktop app and sign in.</li>
+      <li>Click the <strong>Code</strong> tab at the top. The editor doesn't run in Chat or Cowork.</li>
+      <li>Click <strong>New session</strong> and choose <strong>Local</strong>, so Claude works on your own computer.</li>
+      <li>Set permissions to <strong>Auto</strong>, so it doesn't ask you to approve hundreds of small steps.</li>
+      <li>Pick the strongest model for setup.</li>
+      <li>In <strong>Settings → Claude Code</strong>, turn on browser access, so Claude can capture real screenshots for B-roll.</li>
+    </ol>
+  </div>
+</section>
+
+<section class="step" id="install">
+  <div class="tc"><b>02:00</b>Step 2</div>
+  <div class="body">
+    <h2>Let Claude install everything</h2>
+    <p>Unzip the kit. Start a new Code session with the <strong>unzipped kit folder</strong> selected, then paste this prompt. Claude installs the free tools (it asks before each one), sets up HyperFrames and Parakeet, installs the <code>video-edit</code> skill, creates your working folder and runs a test render.</p>
+    <div class="box">
+      <div class="box-head"><span>Install prompt</span><button class="copy" type="button" data-copy="p-install">Copy</button></div>
+      <pre id="p-install">Install the Claude video editor from this kit folder on my computer. Ask me before installing any software or model. Follow INSTALL-PROMPT.md in this folder step by step: check Node.js 22+, FFmpeg, Git and Python; create the engine folder; set up HyperFrames, its skills and the Parakeet transcription model; download GSAP and the fonts; make the sound effects; install the video-edit skill; create my "Videos/Claude Edits" folder with the prompts; run a test render; then tell me what's left for me to do.</pre>
+    </div>
+    <p>When it's done you'll have:</p>
+    <div class="folders"><span class="c"># the engine: scripts, HyperFrames studio, sound effects</span>
+claude-video/
+<span class="c"># where you drop videos and paste prompts</span>
+Videos/Claude Edits/          1-short-reel.txt  2-screen-demo-reel.txt  3-long-youtube-video.txt
+<span class="c"># the editor's brain, loaded in every Claude Code session</span>
+~/.claude/skills/video-edit/  SKILL.md  style.md  screen-demo-style.md  shooting-rules.md</div>
+    <div class="note"><p><strong>Then fully quit and reopen the Claude app</strong>, including from the system tray near the clock. Skills only load when the app starts.</p></div>
+  </div>
+</section>
+
+<section class="step" id="connect">
+  <div class="tc"><b>03:00</b>Step 3</div>
+  <div class="body">
+    <h2>Add the connectors</h2>
+    <p>In the Claude app: <strong>Customize → Connectors</strong>. Search for each one, click <strong>+</strong>, then sign in on the page that opens. A ✓ means it's connected.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Connector</th><th>What Claude does with it</th><th>Needed?</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Epidemic Sound</strong></td><td>Searches music by mood, trims the track to your exact video length, and downloads it. On some plans sound-effect downloads are blocked, so the kit makes its own sound effects instead.</td><td>Yes, for music (or use free YouTube Audio Library tracks)</td></tr>
+        <tr><td><strong>Tella</strong></td><td>Pulls your screen recording and camera recording as separate files, so Claude can put the screen full size and your face in a small circle (long videos).</td><td>For long YouTube videos</td></tr>
+        <tr><td><strong>HyperFrames by HeyGen</strong></td><td>Optional. The local HyperFrames already does everything. If you connect it, never let Claude use its paid cloud render.</td><td>No</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section class="step" id="skills">
+  <div class="tc"><b>04:00</b>Step 4</div>
+  <div class="body">
+    <h2>The skills (what makes it edit like a pro)</h2>
+    <p>A skill is a file of instructions Claude reads before it works. This setup uses two sets:</p>
+    <div class="cards">
+      <div class="card"><span class="k">video-edit (custom)</span><p>My full editing process: prep, noise removal, transcription, cutting gaps, captions, hook, zooms, screen demos, music, render and report. Its <code>style.md</code> holds my taste (colours, fonts, caption size, music level) and grows every time I give feedback.</p></div>
+      <div class="card"><span class="k">screen-demo-style</span><p>Part of video-edit. When I explain steps in an app (Search Console, Claude, ChatGPT…), Claude rebuilds the screens as clean animations with a moving cursor, typing and a “STEP 1/5” label. They look much sharper than a raw screen recording.</p></div>
+      <div class="card"><span class="k">HyperFrames skills</span><p>Installed automatically: <code>hyperframes</code>, <code>-core</code>, <code>-animation</code>, <code>-audio</code>, <code>-keyframes</code>, <code>-creative</code>, <code>-registry</code>, <code>-cli</code>, <code>-studio</code> and <code>media-use</code>. They teach Claude how to build animations and render video.</p></div>
+    </div>
+    <p><strong>Check it worked:</strong> in a new Code session, type <code>/vid</code>. <code>/video-edit</code> should appear in the list.</p>
+  </div>
+</section>
+
+<section class="step" id="record">
+  <div class="tc"><b>05:00</b>Step 5</div>
+  <div class="body">
+    <h2>Record so the AI can edit cleanly</h2>
+    <div class="cards">
+      <div class="card"><span class="k">Script first</span><p>Write your script, one sentence per line. It's the source for correct caption spelling and the plan for the edit.</p></div>
+      <div class="card"><span class="k">Mistake → clap</span><p>Clap once, then restart the <strong>whole sentence</strong>. Claude keeps the last complete take.</p></div>
+      <div class="card"><span class="k">Pause</span><p>About 1 second of silence after each line gives Claude clean cut points.</p></div>
+      <div class="card"><span class="k">Name the pair</span><p>Video and script with the same name: <code>topic.mp4</code> and <code>topic script.txt</code>.</p></div>
+    </div>
+    <p>Already trimmed it yourself? That's fine. The prompts tell Claude to do only a final clean-up of leftover gaps.</p>
+  </div>
+</section>
+
+<section class="step" id="short">
+  <div class="tc"><b>06:00</b>Step 6</div>
+  <div class="body">
+    <h2>Edit a Short / Reel (my everyday prompt)</h2>
+    <ol>
+      <li>Copy your video (and its script) into <code>Videos/Claude Edits</code>.</li>
+      <li>In Claude: <strong>Code → New session → Local</strong> → select <code>Videos/Claude Edits</code>.</li>
+      <li>Type <code>/video-edit</code>, paste the prompt below, and press Enter. Close Chrome first, because rendering needs the memory.</li>
+    </ol>
+    <p>This prompt edits <strong>every</strong> video in the folder that doesn't have a “final” yet, so you can drop in several videos at once.</p>
+    <div class="box">
+      <div class="box-head"><span>Prompt 1 · Short Reel</span><button class="copy" type="button" data-copy="p-short">Copy</button></div>
+      <pre id="p-short">Edit every .mp4 video in this folder that does not have a matching "&lt;name&gt; final.mp4" yet, one at a time, into a premium 9:16 Reel.
+If a script exists for a video ("&lt;name&gt; script.txt"), use it. Otherwise use the script pasted at the bottom of this message (if any).
+
+- I already cut and trimmed these videos. Check them again: remove leftover gaps and silences, fix bad cuts, remove repeated words or mistakes, but keep the order of my lines.
+- Remove background noise from my voice (clean but natural), then normalise the loudness.
+- Captions word-by-word, spelled exactly like the script when there is one. If a line in the script is not spoken in the video, don't caption it. Show it on screen as a visual instead.
+- If the video is 16:9, make it 1080x1920 with my video in the middle and a clean premium background on the top and bottom (no plain black bars).
+- Hook in the first 2 seconds: a big bold title from the strongest first line, with a strong animation.
+- A title card for each main point, zooms on important words, text pop-ups for key points, B-roll or animated app/chat screen demos wherever I mention a tool, website or example, soft sound effects, Epidemic Sound music low under my voice, and a "Follow" call-to-action at the end.
+- Premium, clean, not busy. Make all the creative decisions yourself and don't ask me for approval.
+
+Save each one as "&lt;name&gt; final.mp4" in this folder and give me a short report for each.
+
+SCRIPT (optional: paste here, or save it as "&lt;name&gt; script.txt" next to the video):</pre>
+    </div>
+    <p><strong>Time:</strong> a 60-second Reel takes about 20–40 minutes on an 8 GB laptop.</p>
+  </div>
+</section>
+
+<section class="step" id="demo">
+  <div class="tc"><b>07:00</b>Step 7</div>
+  <div class="body">
+    <h2>Reels with animated app-screen demos</h2>
+    <p>For tutorial Reels (“open Search Console, click Performance, paste this…”), Claude rebuilds each app screen as a clean animation timed to your voice. You don't need perfect screen recordings. <strong>Screenshots are enough.</strong></p>
+    <ol>
+      <li>Put the video in <code>Videos/Claude Edits</code>, for example <code>regex hack.mp4</code>.</li>
+      <li>Make a folder next to it called <code>regex hack assets</code> and add:
+        <ul>
+          <li>Screenshots of each screen, in step order: <code>1.png</code>, <code>2.png</code>, <code>3.png</code>…</li>
+          <li>Optional screen recordings: <code>rec 1.mp4</code>, <code>rec 2.mp4</code>…</li>
+          <li>Optional <code>text.txt</code> with the exact prompt or code to show typing on screen.</li>
+        </ul>
+      </li>
+      <li>Type <code>/video-edit</code> and paste:</li>
+    </ol>
+    <div class="box">
+      <div class="box-head"><span>Prompt 2 · Screen-demo Reel</span><button class="copy" type="button" data-copy="p-demo">Copy</button></div>
+      <pre id="p-demo">Edit "PUT-VIDEO-NAME-HERE.mp4" in this folder into an ultimate, premium 9:16 Reel. My script is at the bottom. My screenshots, screen recordings and text are in the folder "PUT-VIDEO-NAME-HERE assets" (screenshots named 1.png, 2.png… in step order; recordings rec 1.mp4…; exact prompts/code in text.txt).
+
+1. UNDERSTAND FIRST
+- Watch and transcribe the whole video, read my script, and look at every screenshot and recording in the assets folder. Work out which step I'm talking about at each moment.
+
+2. CLEAN-UP
+- Remove gaps, silences, repeated words and mistakes so it flows naturally. Keep my order.
+- Remove background noise from my voice (clean but natural) and normalise the loudness.
+
+3. SCREEN DEMOS (most important)
+- Follow your screen-demo-style.md rules.
+- 0-3 sec: my face full screen with a big bold hook title.
+- Whenever I talk about a step inside an app or website, switch to an animated recreation of that screen, timed exactly to my words: cursor moving, clicking, typing, dropdowns, copy, checkmarks. Build it from my screenshots so it looks like the real app. Use my screen recordings where they look clean; otherwise recreate the screen.
+- During demos: only the screen (no face circle), the "STEP x / y" pill with a short heading, a progress bar on top, smooth zoom into the exact button or field, click ripples, and highlights on key values.
+- Show any text from text.txt (prompts, code) typing out character by character.
+- Last 3-6 sec: my face full screen again for the payoff and a "Follow" call-to-action.
+
+4. EVERYTHING ELSE
+- 1080x1920. If my video is 16:9, use the stacked layout with a premium background (no black bars).
+- Word-by-word captions, spelled exactly like the script, shown while my face is on screen and kept away from the demo cards.
+- Soft click, typing and pop sounds, whooshes between steps, and Epidemic Sound music (modern tech / lo-fi) low under my voice.
+- Clean, modern, not busy. Make all the creative decisions yourself and don't ask me for approval.
+
+Save it as "PUT-VIDEO-NAME-HERE final.mp4" in this folder and give me a short report: which demo is shown at which second, and anything I should check.
+
+SCRIPT:
+(paste your full script here)</pre>
+    </div>
+  </div>
+</section>
+
+<section class="step" id="long">
+  <div class="tc"><b>08:00</b>Step 8</div>
+  <div class="body">
+    <h2>Long YouTube videos (16:9, 10+ minutes)</h2>
+    <p>Record in <strong>Tella</strong>, which keeps your screen and camera as separate tracks. Trim it roughly in Tella, then let Claude do the rest:</p>
+    <ul>
+      <li><strong>Cold open:</strong> 30–60 seconds of the best moments up front as a hook, then an “In this video” card.</li>
+      <li><strong>Layouts:</strong> your face full screen when you talk, and the screen full size with your face in a small circle during demos.</li>
+      <li><strong>Polish:</strong> auto zoom into what you're explaining, highlight boxes, click sounds, and automatic blurring of emails and API keys.</li>
+      <li><strong>Extras:</strong> chapter cards, an end screen, plus ready-to-paste YouTube chapters, title ideas and thumbnail frames.</li>
+    </ul>
+    <div class="box">
+      <div class="box-head"><span>Prompt 3 · Long YouTube video</span><button class="copy" type="button" data-copy="p-long">Copy</button></div>
+      <pre id="p-long">Edit my long YouTube video (16:9, 1920x1080) using the video-edit skill.
+
+VIDEO: My Tella video named "PUT-TELLA-VIDEO-NAME-HERE".
+- Get it with the Tella connector: download the screen recording and the camera recording as SEPARATE files, with my Tella cuts applied.
+- If the Tella connector doesn't work, use the screen file and camera file I put in this folder, and tell me what you used.
+- My script is at the bottom of this message (or in this folder as "&lt;name&gt; script.txt").
+
+1. CLEAN-UP (natural flow)
+- I already trimmed it in Tella. Check again: remove leftover gaps, silences, unnecessary words, repeated sentences and long waits while pages load. Keep my order and make it sound smooth and natural, not chopped.
+- Remove background noise from my voice (clean but natural), balance the voice level, and normalise the loudness.
+
+2. COLD OPEN / INTRO HOOK (30-60 seconds, at the very start)
+- 0-5 sec: the single strongest moment of the whole video (a surprising line or the best result on screen) with big bold text.
+- 5-40 sec: 4-6 quick clips (3-6 sec each) picked from the full video: results, surprising statements, visual "wow" moments. Fast cuts, whoosh sounds, text pop-ups, energetic music. Don't give away everything.
+- 40-60 sec: an "In this video" card with the 3 main things the viewer will learn, then a smooth transition into the main video.
+
+3. LAYOUTS
+- Talking parts (intro, explanations, outro): my camera full screen.
+- Demo / screen parts: screen recording FULL SCREEN, with my face in a small circle in the bottom-right corner. If something important on screen is under the circle, move the circle to another corner.
+- Switch layouts automatically, based on what I'm saying.
+
+4. SCREEN RECORDING POLISH
+- Auto zoom into the exact area I'm talking about (button, setting, chart, text), then zoom back out smoothly.
+- Highlight boxes, arrows or underlines on important things. Soft click sounds on clicks.
+- Blur any private info: emails, API keys, account names, passwords.
+- If I talk about a website, tool, news or example that I didn't record, capture it with the browser (screenshot or scroll recording) and show it full screen.
+
+5. GRAPHICS AND SOUND
+- A chapter title card at the start of each section, and lower-thirds naming each topic.
+- Text pop-ups for key points. Premium, clean, not busy.
+- Captions: clean subtitles at the bottom, spelled exactly like my script (only lines I actually speak).
+- Epidemic Sound music very low under my voice, a bit louder in the cold open and transitions. Soft sound effects.
+- End screen (last 20 seconds): subscribe animation, leaving space for YouTube's end-screen video boxes.
+
+6. RENDER AND DELIVER
+- Render a quick draft first, check it yourself (frames, audio, black frames), fix problems, then render the final at 1080p.
+- Save in this folder:
+  - "&lt;name&gt; final.mp4"
+  - "&lt;name&gt; chapters.txt" (YouTube chapter timestamps, ready to paste)
+  - "&lt;name&gt; title-ideas.txt" (3 title ideas + a YouTube description)
+  - 3 thumbnail frame suggestions as PNG images
+- Make all the creative decisions yourself and don't ask me for approval. At the end, give me a short report: what you cut, the cold-open clips you picked, the layouts used, and anything I should check.
+
+SCRIPT:
+(paste your full script here)</pre>
+    </div>
+    <p><strong>Time:</strong> a 10-minute video takes about 2–3 hours to render on an 8 GB laptop. Start it before you sleep.</p>
+  </div>
+</section>
+
+<section class="step" id="style">
+  <div class="tc"><b>09:00</b>Step 9</div>
+  <div class="body">
+    <h2>Teach it your style (this is the real secret)</h2>
+    <p>Your first edit will be good. Your tenth will look like <em>your</em> channel, because every note you give becomes a permanent rule.</p>
+    <ol>
+      <li>Watch the final video and reply with notes that include timestamps:</li>
+    </ol>
+    <div class="box">
+      <div class="box-head"><span>Example feedback</span><button class="copy" type="button" data-copy="p-fb">Copy</button></div>
+      <pre id="p-fb">At 0:04 the captions are too big, make them medium and simple. At 0:12 remove the face circle during the screen demo. Use a different premium background colour for each video. The music is too loud.</pre>
+    </div>
+    <ol start="2">
+      <li>When it looks right, say <strong>“save what you learned to the skill.”</strong> Claude writes the lesson into <code>style.md</code> and won't repeat that mistake.</li>
+    </ol>
+    <p>Rules I've added this way include medium captions instead of huge ones, a different premium background colour per video, no face circle during screen demos, and playing the voice at 1.1× after removing pauses so it sounds natural. You can open <code>style.md</code> and edit it yourself at any time.</p>
+  </div>
+</section>
+
+<section class="step" id="lang">
+  <div class="tc"><b>10:00</b>Languages</div>
+  <div class="body">
+    <h2>Telugu, Hindi and other mixed-language videos</h2>
+    <ul>
+      <li><strong>Always give your script.</strong> Claude uses Parakeet only for the timing of each word, and the spelling comes from your script. That's how my Tenglish captions (Telugu in English letters) stay accurate.</li>
+      <li>If a line in your script isn't spoken in the video (for example, an example you only want shown), Claude shows it on screen instead of captioning it.</li>
+      <li>Big multilingual models like Whisper large-v3 were very slow on an 8 GB laptop and less accurate for Telugu, so the setup avoids them by default.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="step" id="trouble">
+  <div class="tc"><b>11:00</b>Fixes</div>
+  <div class="body">
+    <h2>Troubleshooting</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>Problem</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr><td><code>/video-edit</code> doesn't show up</td><td>Fully quit the app (system tray too) and reopen it. Or start your message with “Use my video-edit skill”.</td></tr>
+        <tr><td>Render stuck at “frame 0”</td><td>The laptop is out of memory. Close Chrome and other apps, then type “render again”.</td></tr>
+        <tr><td>Captions spelled wrong</td><td>Save the script as <code>&lt;name&gt; script.txt</code> next to the video and say “redo captions from my script”.</td></tr>
+        <tr><td>Background replacement is slow</td><td>Cutting a person out of every frame is heavy (about 45 minutes for a 1-minute video on 8 GB). The prompt tells Claude to blur the background instead if it would take too long.</td></tr>
+        <tr><td>Big downloads stop halfway</td><td>Keep the Claude app open until they finish. Closing it stops background work.</td></tr>
+        <tr><td>Copyright claim on music</td><td>Use only Epidemic Sound or YouTube Audio Library tracks. Never use film songs.</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section class="step" id="cost">
+  <div class="tc"><b>12:00</b>Cost</div>
+  <div class="body">
+    <h2>What it costs</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>Item</th><th>Cost</th></tr></thead>
+      <tbody>
+        <tr><td>Claude Pro (includes Claude Code)</td><td class="paid">Monthly plan</td></tr>
+        <tr><td>HyperFrames, FFmpeg, Parakeet, OBS Studio, the kit</td><td class="free">Free</td></tr>
+        <tr><td>Music</td><td><span class="paid">Epidemic Sound</span> or <span class="free">YouTube Audio Library (free)</span></td></tr>
+        <tr><td>Screen recording</td><td><span class="paid">Tella</span> or <span class="free">OBS / phone (free)</span></td></tr>
+      </tbody>
+    </table></div>
+    <p>The cheapest working setup is a Claude Pro plan plus the free tools.</p>
+  </div>
+</section>
+
+<footer>
+  <p>Built with Claude Code, HyperFrames, FFmpeg, Parakeet, Epidemic Sound and Tella. Tool names belong to their owners. This is a community guide, not an official one.</p>
+</footer>
+</div>
+
+<script>
+document.querySelectorAll(".copy").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    var el = document.getElementById(btn.dataset.copy);
+    var text = el.textContent;
+    var done = function () { btn.textContent = "Copied"; setTimeout(function () { btn.textContent = "Copy"; }, 1600); };
+    var fallback = function () {
+      var r = document.createRange(); r.selectNodeContents(el);
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      btn.textContent = "Press Ctrl+C";
+    };
+    try { navigator.clipboard.writeText(text).then(done, fallback); } catch (e) { fallback(); }
+  });
+});
+</script>
+
+</body></html>
